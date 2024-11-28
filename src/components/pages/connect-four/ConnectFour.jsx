@@ -8,40 +8,45 @@ const ROWS = 6;
 const COLUMNS = 7;
 
 function ConnectFour() {
+  // I'm using the location state to get the mode and number of sets for the game.
   const location = useLocation();
   const { mode, sets } = location.state || { mode: "PVP", sets: 1 };
 
+  // I initialize the game state. The grid is a 6x7 array, with each cell starting as null.
   const [grid, setGrid] = useState(Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(null)));
   const [currentPlayer, setCurrentPlayer] = useState("Player 1");
   const [nextStartingPlayer, setNextStartingPlayer] = useState("Player 2");
   const [winner, setWinner] = useState(null);
   const [score, setScore] = useState({ "Player 1": 0, "Player 2": 0 });
   const [nextSetModal, setNextSetModal] = useState(false);
-  const [aiThinking, setAiThinking] = useState(false); // NEW: State for AI's turn
+  const [aiThinking, setAiThinking] = useState(false); // I track if the AI is thinking
 
+  // Whenever the current player or mode changes, I check if it's AI's turn and trigger the AI's move.
   useEffect(() => {
     if (mode === "PVAI" && currentPlayer === "Player 2") {
-      setAiThinking(true);
-      setTimeout(aiMove, 500);
+      setAiThinking(true); // AI starts thinking
+      setTimeout(aiMove, 500); // Let AI think for a short while
     } else {
-      setAiThinking(false);
+      setAiThinking(false); // If it's not AI's turn, stop thinking
     }
   }, [currentPlayer, mode]);
 
+  // The AI performs a move using the minimax algorithm.
   const aiMove = () => {
-    setAiThinking(true); // AI starts thinking
-    const playerColor = "yellow"; // Assuming AI is always Player 2 and yellow
-    const result = minimax(grid, 4, true, -Infinity, Infinity, playerColor);
+    setAiThinking(true); // Mark AI is thinking
+    const playerColor = "yellow"; // I assume AI is always Player 2 and yellow
+    const result = minimax(grid, 4, true, -Infinity, Infinity, playerColor); // Get the best move from AI
     if (result?.col !== undefined) {
       setTimeout(() => {
-        dropPiece(result.col);
+        dropPiece(result.col); // Make the AI's move after a delay
         setAiThinking(false); // AI finishes thinking
       }, 1000);
     }
   };
 
+  // I check if the current move resulted in a win by checking all directions.
   const checkWinner = (grid, row, col) => {
-    const color = grid[row][col];
+    const color = grid[row][col]; // Get the color of the piece at this position
     return (
       checkDirection(grid, row, col, 1, 0, color) + checkDirection(grid, row, col, -1, 0, color) > 2 ||
       checkDirection(grid, row, col, 0, 1, color) + checkDirection(grid, row, col, 0, -1, color) > 2 ||
@@ -49,7 +54,8 @@ function ConnectFour() {
       checkDirection(grid, row, col, 1, -1, color) + checkDirection(grid, row, col, -1, 1, color) > 2
     );
   };
-  
+
+  // I check in one direction (horizontal, vertical, or diagonal) for the same color.
   const checkDirection = (grid, row, col, rowDir, colDir, color) => {
     let count = 0;
     let r = row + rowDir;
@@ -61,45 +67,48 @@ function ConnectFour() {
     }
     return count;
   };
-  
+
+  // This function handles dropping a piece into the selected column.
   const dropPiece = (column) => {
     if (winner || grid[0][column] !== null || (mode === "PVAI" && aiThinking)) return;
-    const newGrid = grid.map((row) => row.slice());
+    const newGrid = grid.map((row) => row.slice()); // Create a copy of the grid
     for (let row = ROWS - 1; row >= 0; row--) {
       if (!newGrid[row][column]) {
-        newGrid[row][column] = currentPlayer === "Player 1" ? "red" : "yellow";
-        setGrid(newGrid);
+        newGrid[row][column] = currentPlayer === "Player 1" ? "red" : "yellow"; // Drop the piece for the current player
+        setGrid(newGrid); // Update the grid with the new piece
         if (checkWinner(newGrid, row, column)) {
-          handleGameEnd(currentPlayer);
+          handleGameEnd(currentPlayer); // If a player won, end the game
         } else {
           const nextPlayer = currentPlayer === "Player 1" ? "Player 2" : "Player 1";
-          setCurrentPlayer(nextPlayer);
+          setCurrentPlayer(nextPlayer); // Switch to the next player
         }
         break;
       }
     }
   };
-  
+
+  // This function resets the board after each set.
   const resetBoard = () => {
-    setGrid(Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(null)));
-    setWinner(null);
-    setAiThinking(false); // Reset AI thinking
-    setCurrentPlayer(nextStartingPlayer);
-    setNextStartingPlayer(nextStartingPlayer === "Player 1" ? "Player 2" : "Player 1");
-  
+    setGrid(Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(null))); // Reset the grid
+    setWinner(null); // Reset winner state
+    setAiThinking(false); // Reset AI thinking state
+    setCurrentPlayer(nextStartingPlayer); // Set the next starting player
+    setNextStartingPlayer(nextStartingPlayer === "Player 1" ? "Player 2" : "Player 1"); // Switch starting player
+
+    // If it's AI's turn and it starts the set, make the AI move
     if (mode === "PVAI" && nextStartingPlayer === "Player 2") {
       setTimeout(aiMove, 500);
     }
   };
-  
 
+  // This function handles the end of a game. It updates the score and shows the next set modal if necessary.
   const handleGameEnd = (winningPlayer) => {
     const newScore = { ...score, [winningPlayer]: score[winningPlayer] + 1 };
     setScore(newScore);
     if (newScore[winningPlayer] > Math.floor(sets / 2)) {
-      setWinner(`${winningPlayer} Wins the Match!`);
+      setWinner(`${winningPlayer} Wins the Match!`); // If a player wins the match, display the winner
     } else {
-      setNextSetModal(true);
+      setNextSetModal(true); // If the match isn't over, show the next set modal
     }
   };
 
