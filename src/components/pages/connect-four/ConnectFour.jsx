@@ -1,89 +1,43 @@
-// src/components/connect-four/ConnectFour.jsx
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { minimax } from "./includes/Ai/Minimax";
 import WinnerModal from "./includes/WinnerModal";
+import NextSetModal from "./includes/NextSetModal";
 
 const ROWS = 6;
 const COLUMNS = 7;
-const DEPTH = 4; // Max depth for minimax
 
-// Custom hook for AI using minimax algorithm
-function useConnectFourAI({ grid, currentPlayer, setGrid, setCurrentPlayer, setWinner, winner }) {
+function ConnectFour() {
+  const location = useLocation();
+  const { mode, sets } = location.state || { mode: "PVP", sets: 1 };
+
+  const [grid, setGrid] = useState(Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(null)));
+  const [currentPlayer, setCurrentPlayer] = useState("Player 1");
+  const [nextStartingPlayer, setNextStartingPlayer] = useState("Player 2");
+  const [winner, setWinner] = useState(null);
+  const [score, setScore] = useState({ "Player 1": 0, "Player 2": 0 });
+  const [nextSetModal, setNextSetModal] = useState(false);
+  const [aiThinking, setAiThinking] = useState(false); // NEW: State for AI's turn
+
   useEffect(() => {
-    if (currentPlayer === "Player 2" && !winner) {
-      const bestMove = getBestMove(grid, DEPTH, true);
-      if (bestMove !== null) {
-        makeAIMove(bestMove);
-      }
+    if (mode === "PVAI" && currentPlayer === "Player 2") {
+      setAiThinking(true);
+      setTimeout(aiMove, 500);
+    } else {
+      setAiThinking(false);
     }
-  }, [currentPlayer, grid, winner]);
+  }, [currentPlayer, mode]);
 
-  const makeAIMove = (column) => {
-    if (winner || grid[0][column] !== null) return;
-
-    const newGrid = grid.map(row => row.slice());
-    for (let row = ROWS - 1; row >= 0; row--) {
-      if (!newGrid[row][column]) {
-        newGrid[row][column] = "yellow";
-        setGrid(newGrid);
-
-        if (checkWinner(newGrid, row, column)) {
-          setWinner("Player 2");
-        } else {
-          setCurrentPlayer("Player 1"); // Switch back to Player 1 after AI's move
-        }
-        break;
-      }
+  const aiMove = () => {
+    setAiThinking(true); // AI starts thinking
+    const playerColor = "yellow"; // Assuming AI is always Player 2 and yellow
+    const result = minimax(grid, 4, true, -Infinity, Infinity, playerColor);
+    if (result?.col !== undefined) {
+      setTimeout(() => {
+        dropPiece(result.col);
+        setAiThinking(false); // AI finishes thinking
+      }, 1000);
     }
-  };
-
-  const getBestMove = (grid, depth, maximizingPlayer) => {
-    let bestScore = maximizingPlayer ? -Infinity : Infinity;
-    let bestColumn = null;
-
-    for (let col = 0; col < COLUMNS; col++) {
-      if (grid[0][col] === null) {
-        const tempGrid = grid.map(row => row.slice());
-        for (let row = ROWS - 1; row >= 0; row--) {
-          if (tempGrid[row][col] === null) {
-            tempGrid[row][col] = maximizingPlayer ? "yellow" : "red";
-            break;
-          }
-        }
-        const score = minimax(tempGrid, depth - 1, !maximizingPlayer, -Infinity, Infinity);
-        if ((maximizingPlayer && score > bestScore) || (!maximizingPlayer && score < bestScore)) {
-          bestScore = score;
-          bestColumn = col;
-        }
-      }
-    }
-    return bestColumn;
-  };
-
-  const minimax = (grid, depth, maximizingPlayer, alpha, beta) => {
-    if (depth === 0) return 0;
-
-    let bestScore = maximizingPlayer ? -Infinity : Infinity;
-    for (let col = 0; col < COLUMNS; col++) {
-      if (grid[0][col] === null) {
-        const tempGrid = grid.map(row => row.slice());
-        for (let row = ROWS - 1; row >= 0; row--) {
-          if (tempGrid[row][col] === null) {
-            tempGrid[row][col] = maximizingPlayer ? "yellow" : "red";
-            break;
-          }
-        }
-        const score = minimax(tempGrid, depth - 1, !maximizingPlayer, alpha, beta);
-        if (maximizingPlayer) {
-          bestScore = Math.max(score, bestScore);
-          alpha = Math.max(alpha, bestScore);
-        } else {
-          bestScore = Math.min(score, bestScore);
-          beta = Math.min(beta, bestScore);
-        }
-        if (beta <= alpha) break;
-      }
-    }
-    return bestScore;
   };
 
   const checkWinner = (grid, row, col) => {
@@ -95,7 +49,7 @@ function useConnectFourAI({ grid, currentPlayer, setGrid, setCurrentPlayer, setW
       checkDirection(grid, row, col, 1, -1, color) + checkDirection(grid, row, col, -1, 1, color) > 2
     );
   };
-
+  
   const checkDirection = (grid, row, col, rowDir, colDir, color) => {
     let count = 0;
     let r = row + rowDir;
@@ -107,95 +61,82 @@ function useConnectFourAI({ grid, currentPlayer, setGrid, setCurrentPlayer, setW
     }
     return count;
   };
-}
-
-function ConnectFour({ mode }) {
-  const [grid, setGrid] = useState(Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(null)));
-  const [currentPlayer, setCurrentPlayer] = useState("Player 1");
-  const [winner, setWinner] = useState(null);
-  const [hoveredColumn, setHoveredColumn] = useState(null);
-
-  if (mode === "PVAI") {
-    useConnectFourAI({ grid, currentPlayer, setGrid, setCurrentPlayer, setWinner, winner });
-  }
-
+  
   const dropPiece = (column) => {
-    if (winner || grid[0][column] !== null) return;
-
-    const newGrid = grid.map(row => row.slice());
+    if (winner || grid[0][column] !== null || (mode === "PVAI" && aiThinking)) return;
+    const newGrid = grid.map((row) => row.slice());
     for (let row = ROWS - 1; row >= 0; row--) {
       if (!newGrid[row][column]) {
         newGrid[row][column] = currentPlayer === "Player 1" ? "red" : "yellow";
         setGrid(newGrid);
-
         if (checkWinner(newGrid, row, column)) {
-          setWinner(currentPlayer);
+          handleGameEnd(currentPlayer);
         } else {
-          setCurrentPlayer(currentPlayer === "Player 1" ? "Player 2" : "Player 1");
+          const nextPlayer = currentPlayer === "Player 1" ? "Player 2" : "Player 1";
+          setCurrentPlayer(nextPlayer);
         }
         break;
       }
     }
   };
-
-  const checkWinner = (grid, row, col) => {
-    const color = grid[row][col];
-    return (
-      checkDirection(grid, row, col, 1, 0, color) + checkDirection(grid, row, col, -1, 0, color) > 2 ||
-      checkDirection(grid, row, col, 0, 1, color) + checkDirection(grid, row, col, 0, -1, color) > 2 ||
-      checkDirection(grid, row, col, 1, 1, color) + checkDirection(grid, row, col, -1, -1, color) > 2 ||
-      checkDirection(grid, row, col, 1, -1, color) + checkDirection(grid, row, col, -1, 1, color) > 2
-    );
-  };
-
-  const checkDirection = (grid, row, col, rowDir, colDir, color) => {
-    let count = 0;
-    let r = row + rowDir;
-    let c = col + colDir;
-    while (r >= 0 && r < ROWS && c >= 0 && c < COLUMNS && grid[r][c] === color) {
-      count++;
-      r += rowDir;
-      c += colDir;
+  
+  const resetBoard = () => {
+    setGrid(Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(null)));
+    setWinner(null);
+    setAiThinking(false); // Reset AI thinking
+    setCurrentPlayer(nextStartingPlayer);
+    setNextStartingPlayer(nextStartingPlayer === "Player 1" ? "Player 2" : "Player 1");
+  
+    if (mode === "PVAI" && nextStartingPlayer === "Player 2") {
+      setTimeout(aiMove, 500);
     }
-    return count;
+  };
+  
+
+  const handleGameEnd = (winningPlayer) => {
+    const newScore = { ...score, [winningPlayer]: score[winningPlayer] + 1 };
+    setScore(newScore);
+    if (newScore[winningPlayer] > Math.floor(sets / 2)) {
+      setWinner(`${winningPlayer} Wins the Match!`);
+    } else {
+      setNextSetModal(true);
+    }
   };
 
   return (
     <div className="container h-screen flex flex-col items-center pt-10">
-      <h1 className="text-5xl font-bold text-primary font mb-5">Connect Four</h1>
-      <div>
-        <h2 className="text-xl mb-2">{currentPlayer}'s Turn</h2>
+      <h1 className="text-5xl font-bold text-primary mb-5">Connect Four</h1>
+      <div className="mb-4">
+        <h2 className="text-xl mb-2">{winner ? winner : `${currentPlayer}'s Turn`}</h2>
+        <div className="flex justify-center space-x-4">
+          <p>Player 1: {score["Player 1"]}</p>
+          <p>Player 2: {score["Player 2"]}</p>
+          <p>Best of: {sets} Sets</p>
+        </div>
       </div>
-
-      {/* Game board */}
       <div className="bg-gradient-to-b from-tertiary to-quaternary px-5 py-10 rounded-lg shadow-md shadow-neutral-700">
         <div className="grid grid-cols-7 gap-2 mb-6">
           {Array.from({ length: COLUMNS }).map((_, col) => (
             <button
               key={col}
-              onMouseEnter={() => setHoveredColumn(col)}
-              onMouseLeave={() => setHoveredColumn(null)}
               onClick={() => dropPiece(col)}
-              className={`w-12 h-12 border-[3px] border-secondary bg-gray-200 rounded-lg hover:border-white ${currentPlayer === 'Player 1' ? "hover:bg-red-500" : "hover:bg-yellow-500"}`}
+              disabled={mode === "PVAI" && currentPlayer === "Player 2" && aiThinking}
+              className={`w-12 h-12 border-[3px] border-secondary bg-gray-200 rounded-lg shadow-inner shadow-neutral-800 ${
+                currentPlayer === "Player 1" ? "hover:bg-red-500" : "hover:bg-yellow-500"
+              } ${mode === "PVAI" && aiThinking ? "cursor-not-allowed" : ""}`}
             />
           ))}
         </div>
-
-        {/* Render grid */}
         <div className="grid grid-cols-7 gap-2">
           {grid.map((row, rowIndex) =>
             row.map((cell, colIndex) => (
               <div
                 key={`${rowIndex}-${colIndex}`}
-                className={`w-12 h-12 flex items-center justify-center rounded-full shadow-inner shadow-black border-[3px] border-secondary ${
+                className={`w-12 h-12 flex items-center justify-center rounded-full shadow-inner shadow-neutral-800 border-[3px] border-secondary ${
                   cell === "red"
                     ? "bg-red-500"
                     : cell === "yellow"
                     ? "bg-yellow-500"
-                    : colIndex === hoveredColumn
-                    ? currentPlayer === "Player 1"
-                      ? "bg-red-200"
-                      : "bg-yellow-200"
                     : "bg-gray-200"
                 }`}
               ></div>
@@ -203,9 +144,15 @@ function ConnectFour({ mode }) {
           )}
         </div>
       </div>
-
+      {nextSetModal && !winner && <NextSetModal setNextSetModal={setNextSetModal} resetBoard={resetBoard} winner={currentPlayer} />}
       {winner && (
-        <WinnerModal winner={winner} setWinner={setWinner} />
+        <WinnerModal
+          winner={winner}
+          setWinner={() => {
+            setWinner(null);
+            resetBoard();
+          }}
+        />
       )}
     </div>
   );
